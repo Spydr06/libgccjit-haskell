@@ -59,7 +59,15 @@ module GccJit (
     contextNewArrayType,
     contextNewField,
     contextNewBitfield,
-    fieldAsObject
+    fieldAsObject,
+    contextNewStructType,
+    contextNewOpaqueStruct,
+    structAsType,
+    structSetFields,
+    structGetField,
+    structGetFieldCount,
+    contextNewUnionType,
+    contextNewFunctionPtrType,
 ) where
 
 import Foreign
@@ -85,7 +93,17 @@ data Param = Param
 data Case = Case
 data ExtendedAsm = ExtendedAsm
 
-foreign import ccall "gcc_jit_context_acquire" contextAcquire :: IO (Ptr Context)
+ptrToMaybe :: Ptr a -> Maybe (Ptr a)
+ptrToMaybe ptr | ptr == nullPtr = Nothing
+               | otherwise = Just ptr
+
+listToPtr :: Storable a => [a] -> IO (Ptr a)
+listToPtr xs = withArray xs return
+
+foreign import ccall "gcc_jit_context_acquire" gcc_jit_context_acquire :: IO (Ptr Context)
+contextAcquire :: IO (Maybe (Ptr Context))
+contextAcquire = ptrToMaybe <$> gcc_jit_context_acquire
+
 foreign import ccall "gcc_jit_context_release" contextRelease :: Ptr Context -> IO ()
 
 data StrOption = Progname 
@@ -145,7 +163,9 @@ contextAddDriverOption ctxt optname = do
     c_optname <- newCString optname
     gcc_jit_context_add_driver_option ctxt c_optname
 
-foreign import ccall "gcc_jit_context_compile" contextCompile :: Ptr Context -> IO (Ptr Result)
+foreign import ccall "gcc_jit_context_compile" gcc_jit_context_compile :: Ptr Context -> IO (Ptr Result)
+contextCompile :: Ptr Context -> IO (Maybe (Ptr Result))
+contextCompile = fmap ptrToMaybe . gcc_jit_context_compile
 
 data OutputKind = Assembler
     | ObjectFile
@@ -295,4 +315,46 @@ contextNewBitfield ctxt loc type' width name = do
     gcc_jit_context_new_bitfield ctxt loc type' (fromIntegral width) c_name
 
 foreign import ccall "gcc_jit_field_as_object" fieldAsObject :: Ptr Field -> IO (Ptr Object)
+
+foreign import ccall "gcc_jit_context_new_struct_type" gcc_jit_context_new_struct_type :: Ptr Context -> Ptr Location -> CString -> CInt -> Ptr (Ptr Field) -> IO (Ptr Struct)
+contextNewStructType :: Ptr Context -> Ptr Location -> String -> [Ptr Field] -> IO (Ptr Struct)
+contextNewStructType ctxt loc name fields = do
+    c_name <- newCString name
+    c_fields <- listToPtr fields
+    gcc_jit_context_new_struct_type ctxt loc c_name (fromIntegral $ length fields) c_fields 
+
+foreign import ccall "gcc_jit_context_new_opaque_struct" gcc_jit_context_new_opaque_struct :: Ptr Context -> Ptr Location -> CString -> IO (Ptr Struct)
+contextNewOpaqueStruct :: Ptr Context -> Ptr Location -> String -> IO (Ptr Struct)
+contextNewOpaqueStruct ctxt loc name = do
+    c_name <- newCString name
+    gcc_jit_context_new_opaque_struct ctxt loc c_name
+
+foreign import ccall "gcc_jit_struct_as_type" structAsType :: Ptr Struct -> Ptr Type
+
+foreign import ccall "gcc_jit_struct_set_fields" gcc_jit_struct_set_fields :: Ptr Struct -> Ptr Location -> CInt -> Ptr (Ptr Field) -> IO ()
+structSetFields :: Ptr Struct -> Ptr Location -> [Ptr Field] -> IO ()
+structSetFields struct loc fields = do
+    c_fields <- listToPtr fields
+    gcc_jit_struct_set_fields struct loc (fromIntegral $ length fields) c_fields
+
+foreign import ccall "gcc_jit_struct_get_field" gcc_jit_struct_get_field :: Ptr Struct -> CSize -> IO (Ptr Field)
+structGetField :: Ptr Struct -> Int -> IO (Maybe (Ptr Field))
+structGetField struct index = fmap ptrToMaybe . gcc_jit_struct_get_field struct $ fromIntegral index
+
+foreign import ccall "gcc_jit_struct_get_field_count" gcc_jit_struct_get_field_count :: Ptr Struct -> IO CSize
+structGetFieldCount :: Ptr Struct -> IO Int
+structGetFieldCount = fmap fromIntegral . gcc_jit_struct_get_field_count
+
+foreign import ccall "gcc_jit_context_new_union_type" gcc_jit_context_new_union_type :: Ptr Context -> Ptr Location -> CString -> CInt -> Ptr (Ptr Field) -> IO (Ptr Type)
+contextNewUnionType :: Ptr Context -> Ptr Location -> String -> [Ptr Field] -> IO (Ptr Type)
+contextNewUnionType ctxt loc name fields = do
+    c_name <- newCString name
+    c_fields <- listToPtr fields
+    gcc_jit_context_new_union_type ctxt loc c_name (fromIntegral $ length fields) c_fields
+
+foreign import ccall "gcc_jit_context_new_function_ptr_type" gcc_jit_context_new_function_ptr_type :: Ptr Context -> Ptr Location -> Ptr Type -> CInt -> Ptr (Ptr Type) -> CInt -> IO (Ptr Type)
+contextNewFunctionPtrType :: Ptr Context -> Ptr Location -> Ptr Type -> [Ptr Type] -> Bool -> IO (Ptr Type)
+contextNewFunctionPtrType ctxt loc returnType paramTypes isVariadic = do
+    c_paramTypes <- listToPtr paramTypes
+    gcc_jit_context_new_function_ptr_type ctxt loc returnType (fromIntegral $ length paramTypes) c_paramTypes (fromIntegral $ fromEnum isVariadic)
 

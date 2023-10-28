@@ -12,10 +12,12 @@ import System.IO
 foreign import ccall "dynamic"
     mkFun :: FunPtr (CString -> ()) -> (CString -> ())
 
-dieIfNull :: Ptr a -> String -> IO ()
-dieIfNull ptr msg = if ptr == nullPtr 
-    then die msg
-    else return ()
+unwrapOrDie :: IO (Maybe a) -> String -> IO a
+unwrapOrDie x msg = do
+    x' <- x
+    case x' of
+        Nothing -> die msg
+        Just x'' -> return x''
 
 createCode :: Ptr GccJit.Context -> IO ()
 createCode ctxt = 
@@ -31,9 +33,8 @@ createCode ctxt =
 main :: IO ()
 main = do
     -- Get a "context" object for working with the library.
-    ctxt <- GccJit.contextAcquire
-    dieIfNull ctxt "NULL ctxt"
-   
+    ctxt <- unwrapOrDie GccJit.contextAcquire "NULL ctxt"
+    
     -- Set some options on the context.
     -- Let's see the code being generated, in assembler form.
     GccJit.setBoolOption ctxt GccJit.DumpGeneratedCode True
@@ -42,15 +43,13 @@ main = do
     createCode ctxt
 
     -- Compile the code.
-    result <- GccJit.contextCompile ctxt
-    dieIfNull result "NULL result" 
+    result <- unwrapOrDie (GccJit.contextCompile ctxt) "NULL result"
 
     -- Extract the generated code from "result".
-    greet <- GccJit.resultGetCode result "greet"
+    greet <- unwrapOrDie (GccJit.resultGetCode result "greet") "NULL greet"
+    
     -- Now call the generated function:
-    case greet of
-        Just greet' -> mkFun greet' <$> newCString "world"
-        Nothing -> die "NULL greet"
+    mkFun greet <$> newCString "world"
     hFlush stdout
 
     GccJit.contextRelease ctxt
