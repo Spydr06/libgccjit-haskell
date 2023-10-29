@@ -145,6 +145,14 @@ module GccJit (
     timerPush,
     timerPop,
     timerPrint,
+    rValueSetBoolRequireTailCall,
+    typeGetAligned,
+    typeGetVector,
+    functionGetAddress,
+    contextNewRValueFromVector,
+    versionMajor,
+    versionMinor,
+    versionPatchlevel,
 ) where
 
 import Foreign
@@ -153,6 +161,8 @@ import Foreign.C (CString, newCString)
 import System.Posix.Types (CSsize)
 import Data.Bifunctor (Bifunctor(bimap))
 import Control.Applicative (Applicative(liftA2))
+import System.Timeout (Timeout)
+import GHC.Read (list)
 
 -- libgccjit data types (opaque C structs)
 data Context
@@ -731,4 +741,37 @@ timerPop timer itemName = do
     gcc_jit_timer_pop timer c_itemName
 
 foreign import ccall "gcc_jit_timer_print" timerPrint :: Ptr Timer -> Ptr CFile -> IO ()
+
+foreign import ccall "gcc_jit_rvalue_set_bool_require_tail_call" gcc_jit_rvalue_set_bool_require_tail_call :: Ptr RValue -> CInt -> IO ()
+rValueSetBoolRequireTailCall :: Ptr RValue -> Bool -> IO ()
+rValueSetBoolRequireTailCall call = gcc_jit_rvalue_set_bool_require_tail_call call . fromIntegral . fromEnum
+
+foreign import ccall "gcc_jit_type_get_aligned" gcc_jit_type_get_aligned :: Ptr Type -> CSize -> IO (Ptr Type)
+typeGetAligned :: Ptr Type -> Int64 -> IO (Ptr Type)
+typeGetAligned type' = gcc_jit_type_get_aligned type' . fromIntegral
+
+foreign import ccall "gcc_jit_type_get_vector" gcc_jit_type_get_vector :: Ptr Type -> CSize -> IO (Ptr Type)
+typeGetVector :: Ptr Type -> Int64 -> IO (Ptr Type)
+typeGetVector type' = gcc_jit_type_get_vector type' . fromIntegral
+
+foreign import ccall "gcc_jit_function_get_address" functionGetAddress :: Ptr Function -> Ptr Location -> Ptr RValue
+
+foreign import ccall "gcc_jit_context_new_rvalue_from_vector" gcc_jit_context_new_rvalue_from_vector :: Ptr Context -> Ptr Location -> Ptr Type -> CSize -> Ptr (Ptr RValue) -> IO (Ptr RValue)
+contextNewRValueFromVector :: Ptr Context -> Ptr Location -> Ptr Type -> [Ptr RValue] -> IO (Ptr RValue)
+contextNewRValueFromVector ctxt loc vecType elements = do
+    c_elements <- listToPtr elements
+    gcc_jit_context_new_rvalue_from_vector ctxt loc vecType (fromIntegral $ length elements) c_elements
+
+foreign import ccall "gcc_jit_version_major" gcc_jit_version_major :: IO CInt
+versionMajor :: IO Int
+versionMajor = fromIntegral <$> gcc_jit_version_major
+
+foreign import ccall "gcc_jit_version_minor" gcc_jit_version_minor :: IO CInt
+versionMinor :: IO Int
+versionMinor = fromIntegral <$> gcc_jit_version_minor
+
+foreign import ccall "gcc_jit_version_patchlevel" gcc_jit_version_patchlevel :: IO CInt
+versionPatchlevel :: IO Int
+versionPatchlevel = fromIntegral <$> gcc_jit_version_patchlevel
+
 
