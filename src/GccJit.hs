@@ -18,6 +18,7 @@ module GccJit (
     Param,
     Case,
     ExtendedAsm,
+    Timer,
     -- enums
     StrOption(..),
     IntOption(..),
@@ -134,33 +135,42 @@ module GccJit (
     contextNewCase,
     caseAsObject,
     blockEndWithSwitch,
+    contextNewChildContext,
+    contextDumpReproducerToFile,
+    contextEnableDump,
+    timerNew,
+    timerRelease,
+    contextSetTimer,
+    contextGetTimer,
+    timerPush,
+    timerPop,
+    timerPrint,
 ) where
 
 import Foreign
 import Foreign.C.Types
-import Foreign.C (CString, newCString, newCStringLen)
+import Foreign.C (CString, newCString)
 import System.Posix.Types (CSsize)
 import Data.Bifunctor (Bifunctor(bimap))
 import Control.Applicative (Applicative(liftA2))
-import GHC.Generics (UInt)
 
 -- libgccjit data types (opaque C structs)
-data Context = Context
-data Result = Result
-data Object = Object
-data Location = Location
-data Type = Type
-data Field = Field
-data Struct = Struct
-data FunctionType = FunctionType
-data VectorType = VectorType
-data Function = Function
-data Block = Block
-data RValue = RValue
-data LValue = LValue
-data Param = Param
-data Case = Case
-data ExtendedAsm = ExtendedAsm
+data Context
+data Result
+data Object
+data Location
+data Type
+data Field
+data Struct
+data FunctionType
+data VectorType
+data Function
+data Block
+data RValue
+data LValue
+data Param
+data Case
+data ExtendedAsm
 
 ptrToMaybe :: Ptr a -> Maybe (Ptr a)
 ptrToMaybe ptr | ptr == nullPtr = Nothing
@@ -682,4 +692,43 @@ blockEndWithSwitch block loc expr defaultBlock cases = do
     c_cases <- listToPtr cases
     gcc_jit_block_end_with_switch block loc expr defaultBlock (fromIntegral $ length cases) c_cases
 
+foreign import ccall "gcc_jit_context_new_child_context" gcc_jit_context_new_child_context :: Ptr Context -> IO (Ptr Context)
+contextNewChildContext :: Ptr Context -> IO (Maybe (Ptr Context))
+contextNewChildContext = fmap ptrToMaybe . gcc_jit_context_new_child_context
+
+foreign import ccall "gcc_jit_context_dump_reproducer_to_file" gcc_jit_context_dump_reproducer_to_file :: Ptr Context -> CString -> IO ()
+contextDumpReproducerToFile :: Ptr Context -> String -> IO ()
+contextDumpReproducerToFile ctxt path = do
+    c_path <- newCString path
+    gcc_jit_context_dump_reproducer_to_file ctxt c_path
+
+foreign import ccall "gcc_jit_context_enable_dump" gcc_jit_context_enable_dump :: Ptr Context -> CString -> Ptr CString -> IO ()
+contextEnableDump :: Ptr Context -> String -> Ptr CString -> IO ()
+contextEnableDump ctxt dumpName outPtr = do
+    c_dumpName <- newCString dumpName
+    gcc_jit_context_enable_dump ctxt c_dumpName outPtr
+
+data Timer
+
+foreign import ccall "gcc_jit_timer_new" timerNew :: IO (Ptr Timer)
+foreign import ccall "gcc_jit_timer_release" timerRelease :: Ptr Timer -> IO ()
+foreign import ccall "gcc_jit_context_set_timer" contextSetTimer :: Ptr Context -> Ptr Timer -> IO ()
+
+foreign import ccall "gcc_jit_context_get_timer" gcc_jit_context_get_timer :: Ptr Context -> IO (Ptr Timer)
+contextGetTimer :: Ptr Context -> IO (Maybe (Ptr Timer))
+contextGetTimer = fmap ptrToMaybe . gcc_jit_context_get_timer
+
+foreign import ccall "gcc_jit_timer_push" gcc_jit_timer_push :: Ptr Timer -> CString -> IO ()
+timerPush :: Ptr Timer -> String -> IO ()
+timerPush timer itemName = do
+    c_itemName <- newCString itemName
+    gcc_jit_timer_push timer c_itemName
+
+foreign import ccall "gcc_jit_timer_pop" gcc_jit_timer_pop :: Ptr Timer -> CString -> IO ()
+timerPop :: Ptr Timer -> String -> IO ()
+timerPop timer itemName = do
+    c_itemName <- newCString itemName
+    gcc_jit_timer_pop timer c_itemName
+
+foreign import ccall "gcc_jit_timer_print" timerPrint :: Ptr Timer -> Ptr CFile -> IO ()
 
