@@ -123,6 +123,17 @@ module GccJit (
     lValueSetTLSModel,
     lValueSetRegisterName,
     functionNewLocal,
+    blockAddEval,
+    blockAddAssignment,
+    blockAddAssignmentOp,
+    blockAddComment,
+    blockEndWithConditional,
+    blockEndWithJump,
+    blockEndWithReturn,
+    blockEndWithVoidReturn,
+    contextNewCase,
+    caseAsObject,
+    blockEndWithSwitch,
 ) where
 
 import Foreign
@@ -643,4 +654,32 @@ functionNewLocal :: Ptr Function -> Ptr Location -> Ptr Type -> String -> IO (Pt
 functionNewLocal func loc type' name = do
     c_name <- newCString name
     gcc_jit_function_new_local func loc type' c_name
+
+foreign import ccall "gcc_jit_block_add_eval" blockAddEval :: Ptr Block -> Ptr Location -> Ptr RValue -> IO ()
+foreign import ccall "gcc_jit_block_add_assignment" blockAddAssignment :: Ptr Block -> Ptr Location -> Ptr LValue -> Ptr RValue -> IO ()
+
+foreign import ccall "gcc_jit_block_add_assignment_op" gcc_jit_block_add_assignment_op :: Ptr Block -> Ptr Location -> Ptr LValue -> CInt -> Ptr RValue -> IO ()
+blockAddAssignmentOp :: Ptr Block -> Ptr Location -> Ptr LValue -> BinaryOp -> Ptr RValue -> IO ()
+blockAddAssignmentOp block loc lvalue = gcc_jit_block_add_assignment_op block loc lvalue . fromIntegral . fromEnum
+
+foreign import ccall "gcc_jit_block_add_comment" gcc_jit_block_add_comment :: Ptr Block -> Ptr Location -> CString -> IO ()
+blockAddComment :: Ptr Block -> Ptr Location -> String -> IO ()
+blockAddComment block loc text = do
+    c_text <- newCString text
+    gcc_jit_block_add_comment block loc c_text
+
+foreign import ccall "gcc_jit_block_end_with_conditional" blockEndWithConditional :: Ptr Block -> Ptr Location -> Ptr RValue -> Ptr Block -> Ptr Block -> IO ()
+foreign import ccall "gcc_jit_block_end_with_jump" blockEndWithJump :: Ptr Block -> Ptr Location -> Ptr Block -> IO ()
+foreign import ccall "gcc_jit_block_end_with_return" blockEndWithReturn :: Ptr Block -> Ptr Location -> Ptr RValue -> IO ()
+foreign import ccall "gcc_jit_block_end_with_void_return" blockEndWithVoidReturn :: Ptr Block -> Ptr Location -> IO ()
+
+foreign import ccall "gcc_jit_context_new_case" contextNewCase :: Ptr Context -> Ptr RValue -> Ptr RValue -> Ptr Block -> IO (Ptr Case)
+foreign import ccall "gcc_jit_case_as_object" caseAsObject :: Ptr Case -> IO (Ptr Object)
+
+foreign import ccall "gcc_jit_block_end_with_switch" gcc_jit_block_end_with_switch :: Ptr Block -> Ptr Location -> Ptr RValue -> Ptr Block -> CInt -> Ptr (Ptr Case) -> IO ()
+blockEndWithSwitch :: Ptr Block -> Ptr Location -> Ptr RValue -> Ptr Block -> [Ptr Case] -> IO ()
+blockEndWithSwitch block loc expr defaultBlock cases = do
+    c_cases <- listToPtr cases
+    gcc_jit_block_end_with_switch block loc expr defaultBlock (fromIntegral $ length cases) c_cases
+
 
