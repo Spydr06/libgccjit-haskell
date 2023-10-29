@@ -9,8 +9,9 @@ import Foreign.C (CString, newCString)
 import System.Exit
 import System.IO
 
+type GreetFunction = CString -> IO ()
 foreign import ccall "dynamic"
-    mkFun :: FunPtr (CString -> ()) -> (CString -> ())
+    mkFun :: FunPtr (GreetFunction) -> (GreetFunction)
 
 unwrapOrDie :: IO (Maybe a) -> String -> IO a
 unwrapOrDie x msg = do
@@ -67,7 +68,8 @@ main = do
     greet <- unwrapOrDie (GccJit.resultGetCode result "greet") "NULL greet"
     
     -- Now call the generated function:
-    mkFun greet <$> newCString "world"
+    worldStr <- newCString "World"
+    (mkFun greet) worldStr
     hFlush stdout
 
     GccJit.contextRelease ctxt
