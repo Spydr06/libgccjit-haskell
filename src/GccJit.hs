@@ -27,6 +27,9 @@ module GccJit (
     FunctionKind(..),
     TLSModel(..),
     GlobalKind(..),
+    UnaryOp(..),
+    BinaryOp(..),
+    Comparison(..),
     -- functions
     contextAcquire,
     contextRelease,
@@ -101,6 +104,25 @@ module GccJit (
     contextNewRValueFromPtr,
     contextNull,
     contextNewStringLiteral,
+    contextNewUnaryOp,
+    contextNewBinaryOp,
+    contextNewComparison,
+    contextNewCall,
+    contextNewCallThroughPtr,
+    contextNewCast,
+    contextNewBitcast,
+    lValueGetAlignemnt,
+    lValueSetAlignment,
+    contextNewArrayAccess,
+    lValueAccessField,
+    rValueAccessField,
+    rValueDereferenceField,
+    rValueDereference,
+    lValueGetAddress,
+    lValueSetLinkSection,
+    lValueSetTLSModel,
+    lValueSetRegisterName,
+    functionNewLocal,
 ) where
 
 import Foreign
@@ -109,6 +131,7 @@ import Foreign.C (CString, newCString, newCStringLen)
 import System.Posix.Types (CSsize)
 import Data.Bifunctor (Bifunctor(bimap))
 import Control.Applicative (Applicative(liftA2))
+import GHC.Generics (UInt)
 
 -- libgccjit data types (opaque C structs)
 data Context = Context
@@ -528,4 +551,96 @@ contextNewStringLiteral :: Ptr Context -> String -> IO (Ptr RValue)
 contextNewStringLiteral ctxt value = do
     c_value <- newCString value
     gcc_jit_context_new_string_literal ctxt c_value
+
+data UnaryOp = UnaryMinus
+    | UnaryBitwiseNegate
+    | UnaryLogicalNegate
+    | UnaryAbs
+    deriving (Enum)
+
+foreign import ccall "gcc_jit_context_new_unary_op" gcc_jit_context_new_unary_op :: Ptr Context -> Ptr Location -> CInt -> Ptr Type -> Ptr RValue -> IO (Ptr RValue)
+contextNewUnaryOp :: Ptr Context -> Ptr Location -> UnaryOp -> Ptr Type -> Ptr RValue -> IO (Ptr RValue)
+contextNewUnaryOp ctxt loc op = gcc_jit_context_new_unary_op ctxt loc $ fromIntegral $ fromEnum op
+
+data BinaryOp = BinaryPlus
+    | BinaryMinus
+    | BinaryMult
+    | BinaryDivide
+    | BinaryModulo
+    | BinaryBitwiseAnd
+    | BinaryBitwiseXor
+    | BinaryBitwiseOr
+    | BinaryLogicalAnd
+    | BinaryLogicalOr
+    | BinaryLShift
+    | BinaryRShift
+    deriving (Enum)
+
+foreign import ccall "gcc_jit_context_new_binary_op" gcc_jit_context_new_binary_op :: Ptr Context -> Ptr Location -> CInt -> Ptr Type -> Ptr RValue -> Ptr RValue -> IO (Ptr RValue)
+contextNewBinaryOp :: Ptr Context -> Ptr Location -> BinaryOp -> Ptr Type -> Ptr RValue -> Ptr RValue -> IO (Ptr RValue)
+contextNewBinaryOp ctxt loc op = gcc_jit_context_new_binary_op ctxt loc $ fromIntegral $ fromEnum op
+
+data Comparison = ComparisonEq
+    | ComparisonNe
+    | ComparisonLt
+    | ComparisonLe
+    | ComparisonGt
+    | ComparisonGe
+    deriving (Enum)
+
+foreign import ccall "gcc_jit_context_new_comparison" gcc_jit_context_new_comparison :: Ptr Context -> Ptr Location -> CInt -> Ptr RValue -> Ptr RValue -> IO (Ptr RValue)
+contextNewComparison :: Ptr Context -> Ptr Location -> Comparison -> Ptr RValue -> Ptr RValue -> IO (Ptr RValue)
+contextNewComparison ctxt  loc op = gcc_jit_context_new_comparison ctxt loc $ fromIntegral $ fromEnum op
+
+foreign import ccall "gcc_jit_context_new_call" gcc_jit_context_new_call :: Ptr Context -> Ptr Location -> Ptr Function -> CInt -> Ptr (Ptr RValue) -> IO (Ptr RValue)
+contextNewCall :: Ptr Context -> Ptr Location -> Ptr Function -> [Ptr RValue] -> IO (Ptr RValue)
+contextNewCall ctxt loc func args = do
+    c_args <- listToPtr args
+    gcc_jit_context_new_call ctxt loc func (fromIntegral $ length args) c_args
+
+foreign import ccall "gcc_jit_context_new_call_through_ptr" gcc_jit_context_new_call_through_ptr :: Ptr Context -> Ptr Location -> Ptr RValue -> CInt -> Ptr (Ptr RValue) -> IO (Ptr RValue)
+contextNewCallThroughPtr :: Ptr Context -> Ptr Location -> Ptr RValue -> [Ptr RValue] -> IO (Ptr RValue)
+contextNewCallThroughPtr ctxt loc fnPtr args = do
+    c_args <- listToPtr args
+    gcc_jit_context_new_call_through_ptr ctxt loc fnPtr (fromIntegral $ length args) c_args
+
+foreign import ccall "gcc_jit_context_new_cast" contextNewCast :: Ptr Context -> Ptr Location -> Ptr RValue -> Ptr Type -> IO (Ptr RValue)
+foreign import ccall "gcc_jit_context_new_bitcast" contextNewBitcast :: Ptr Context -> Ptr Location -> Ptr RValue -> Ptr Type -> IO (Ptr RValue)
+
+foreign import ccall "gcc_jit_lvalue_set_alignment" gcc_jit_lvalue_set_alignment :: Ptr LValue -> CUInt -> IO ()
+lValueSetAlignment :: Ptr LValue -> Int -> IO ()
+lValueSetAlignment lvalue = gcc_jit_lvalue_set_alignment lvalue . fromIntegral
+
+foreign import ccall "gcc_jit_lvalue_get_alignment" gcc_jit_lvalue_get_alignment :: Ptr LValue -> IO CUInt
+lValueGetAlignemnt :: Ptr LValue -> IO Int
+lValueGetAlignemnt = fmap fromIntegral . gcc_jit_lvalue_get_alignment
+
+foreign import ccall "gcc_jit_context_new_array_access" contextNewArrayAccess :: Ptr Context -> Ptr Location -> Ptr RValue -> Ptr RValue -> IO (Ptr LValue)
+foreign import ccall "gcc_jit_lvalue_access_field" lValueAccessField :: Ptr LValue -> Ptr Location -> Ptr Field -> IO (Ptr LValue)
+foreign import ccall "gcc_jit_rvalue_access_field" rValueAccessField :: Ptr RValue -> Ptr Location -> Ptr Field -> IO (Ptr RValue)
+foreign import ccall "gcc_jit_rvalue_dereference_field" rValueDereferenceField :: Ptr RValue -> Ptr Location -> Ptr Field -> IO (Ptr LValue)
+foreign import ccall "gcc_jit_rvalue_dereference" rValueDereference :: Ptr RValue -> Ptr Location -> IO (Ptr LValue)
+foreign import ccall "gcc_jit_lvalue_get_address" lValueGetAddress :: Ptr LValue -> Ptr Location -> IO (Ptr RValue)
+
+foreign import ccall "gcc_jit_lvalue_set_tls_model" gcc_jit_lvalue_set_tls_model :: Ptr LValue -> CInt -> IO ()
+lValueSetTLSModel :: Ptr LValue -> TLSModel -> IO ()
+lValueSetTLSModel lvalue = gcc_jit_lvalue_set_tls_model lvalue . fromIntegral . fromEnum
+
+foreign import ccall "gcc_jit_lvalue_set_link_section" gcc_jit_lvalue_set_link_section :: Ptr LValue -> CString -> IO ()
+lValueSetLinkSection :: Ptr LValue -> String -> IO ()
+lValueSetLinkSection lvalue sectionName = do
+    c_sectionName <- newCString sectionName
+    gcc_jit_lvalue_set_link_section lvalue c_sectionName
+
+foreign import ccall "gcc_jit_lvalue_set_register_name" gcc_jit_lvalue_set_register_name :: Ptr LValue -> CString -> IO ()
+lValueSetRegisterName :: Ptr LValue -> String -> IO ()
+lValueSetRegisterName lvalue registerName = do
+    c_registerName <- newCString registerName
+    gcc_jit_lvalue_set_register_name lvalue c_registerName
+
+foreign import ccall "gcc_jit_function_new_local" gcc_jit_function_new_local :: Ptr Function -> Ptr Location -> Ptr Type -> CString -> IO (Ptr LValue)
+functionNewLocal :: Ptr Function -> Ptr Location -> Ptr Type -> String -> IO (Ptr LValue)
+functionNewLocal func loc type' name = do
+    c_name <- newCString name
+    gcc_jit_function_new_local func loc type' c_name
 

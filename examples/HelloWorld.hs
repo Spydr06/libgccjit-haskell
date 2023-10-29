@@ -40,6 +40,8 @@ createCode ctxt = do
     formatArg <- GccJit.contextNewStringLiteral ctxt "Hello %s!\n"
     nameArg <- GccJit.paramAsRValue paramName
 
+    block <- GccJit.functionNewBlock func Nothing
+    printCall <- GccJit.contextNewCall ctxt nullPtr printFunc [formatArg, nameArg]
 
     return ()
 
