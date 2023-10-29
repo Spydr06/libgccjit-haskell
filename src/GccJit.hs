@@ -24,6 +24,9 @@ module GccJit (
     BoolOption(..),
     OutputKind(..),
     Types(..),
+    FunctionKind(..),
+    TLSModel(..),
+    GlobalKind(..),
     -- functions
     contextAcquire,
     contextRelease,
@@ -68,12 +71,44 @@ module GccJit (
     structGetFieldCount,
     contextNewUnionType,
     contextNewFunctionPtrType,
+    contextNewParam,
+    paramAsObject,
+    paramAsLValue,
+    paramAsRValue,
+    contextNewFunction,
+    contextGetBuiltinFunction,
+    functionAsObject,
+    functionGetParam,
+    functionDumpToDot,
+    functionNewBlock,
+    blockAsObject,
+    blockGetFunction,
+    contextNewGlobal,
+    contextNewStructConstructor,
+    contextNewUnionConstructor,
+    contextNewArrayConstructor,
+    globalSetInitializerRValue,
+    globalSetInitializer,
+    lValueAsObject,
+    lValueAsRValue,
+    rValueAsObject,
+    rValueGetType,
+    contextZero,
+    contextOne,
+    contextNewRValueFromInt,
+    contextNewRValueFromLong,
+    contextNewRValueFromDouble,
+    contextNewRValueFromPtr,
+    contextNull,
+    contextNewStringLiteral,
 ) where
 
 import Foreign
 import Foreign.C.Types
-import Foreign.C (CString, newCString)
+import Foreign.C (CString, newCString, newCStringLen)
 import System.Posix.Types (CSsize)
+import Data.Bifunctor (Bifunctor(bimap))
+import Control.Applicative (Applicative(liftA2))
 
 -- libgccjit data types (opaque C structs)
 data Context = Context
@@ -97,8 +132,15 @@ ptrToMaybe :: Ptr a -> Maybe (Ptr a)
 ptrToMaybe ptr | ptr == nullPtr = Nothing
                | otherwise = Just ptr
 
+maybeToPtr :: Maybe (Ptr a) -> Ptr a
+maybeToPtr Nothing = nullPtr
+maybeToPtr (Just p) = p
+
 listToPtr :: Storable a => [a] -> IO (Ptr a)
 listToPtr xs = withArray xs return
+
+unzipPairs :: [(a, b)] -> ([a], [b])
+unzipPairs xs = (fst <$> xs, snd <$> xs)
 
 foreign import ccall "gcc_jit_context_acquire" gcc_jit_context_acquire :: IO (Ptr Context)
 contextAcquire :: IO (Maybe (Ptr Context))
@@ -356,5 +398,134 @@ foreign import ccall "gcc_jit_context_new_function_ptr_type" gcc_jit_context_new
 contextNewFunctionPtrType :: Ptr Context -> Ptr Location -> Ptr Type -> [Ptr Type] -> Bool -> IO (Ptr Type)
 contextNewFunctionPtrType ctxt loc returnType paramTypes isVariadic = do
     c_paramTypes <- listToPtr paramTypes
-    gcc_jit_context_new_function_ptr_type ctxt loc returnType (fromIntegral $ length paramTypes) c_paramTypes (fromIntegral $ fromEnum isVariadic)
+    gcc_jit_context_new_function_ptr_type ctxt loc returnType (fromIntegral $ length paramTypes) c_paramTypes $ fromIntegral $ fromEnum isVariadic
+
+-- Constructing functions.
+
+foreign import ccall "gcc_jit_context_new_param" gcc_jit_context_new_param :: Ptr Context -> Ptr Location -> Ptr Type -> CString -> IO (Ptr Param)
+contextNewParam :: Ptr Context -> Ptr Location -> Ptr Type -> String -> IO (Ptr Param)
+contextNewParam ctxt loc type' name = do
+    c_name <- newCString name
+    gcc_jit_context_new_param ctxt loc type' c_name
+
+foreign import ccall "gcc_jit_param_as_object" paramAsObject :: Ptr Param -> IO (Ptr Object)
+foreign import ccall "gcc_jit_param_as_lvalue" paramAsLValue :: Ptr Param -> IO (Ptr LValue)
+foreign import ccall "gcc_jit_param_as_rvalue" paramAsRValue :: Ptr Param -> IO (Ptr RValue)
+
+data FunctionKind = FunctionExported
+    | FunctionInternal
+    | FunctionImported
+    | FunctionAlwaysInline
+    deriving (Enum)
+
+data TLSModel = TSLNone
+    | TLSGlobalDynamic
+    | TLSLocalDynamic
+    | TLSInitialExec
+    | TLSLocalExec
+    deriving (Enum)
+
+foreign import ccall "gcc_jit_context_new_function" gcc_jit_context_new_function :: Ptr Context -> Ptr Location -> CInt -> Ptr Type -> CString -> CInt -> Ptr (Ptr Param) -> CInt -> IO (Ptr Function)
+contextNewFunction :: Ptr Context -> Ptr Location -> FunctionKind -> Ptr Type -> String -> [Ptr Param] -> Bool -> IO (Ptr Function)
+contextNewFunction ctxt loc kind returnType name params isVariadic = do
+    c_name <- newCString name
+    c_params <- listToPtr params
+    gcc_jit_context_new_function ctxt loc (fromIntegral $ fromEnum kind) returnType c_name (fromIntegral $ length params) c_params $ fromIntegral $ fromEnum isVariadic
+
+foreign import ccall "gcc_jit_context_get_builtin_function" gcc_jit_context_get_builtin_function :: Ptr Context -> CString -> IO (Ptr Function)
+contextGetBuiltinFunction :: Ptr Context -> String -> IO (Maybe (Ptr Function))
+contextGetBuiltinFunction ctxt name = do
+    c_name <- newCString name
+    ptrToMaybe <$> gcc_jit_context_get_builtin_function ctxt c_name
+
+foreign import ccall "gcc_jit_function_as_object" functionAsObject :: Ptr Function -> IO (Ptr Object)
+
+foreign import ccall "gcc_jit_function_get_param" gcc_jit_function_get_param :: Ptr Function -> CInt -> IO (Ptr Object)
+functionGetParam :: Ptr Function -> Int -> IO (Maybe (Ptr Object))
+functionGetParam func = fmap ptrToMaybe . gcc_jit_function_get_param func . fromIntegral
+
+foreign import ccall "gcc_jit_function_dump_to_dot" gcc_jit_function_dump_to_dot :: Ptr Function -> CString -> IO ()
+functionDumpToDot :: Ptr Function -> String -> IO ()
+functionDumpToDot func path = do
+    c_path <- newCString path
+    gcc_jit_function_dump_to_dot func c_path
+
+foreign import ccall "gcc_jit_function_new_block" gcc_jit_function_new_block :: Ptr Function -> CString -> IO (Ptr Block)
+functionNewBlock :: Ptr Function -> Maybe String -> IO (Maybe (Ptr Block))
+functionNewBlock func (Just name) = do
+    c_name <- newCString name
+    ptrToMaybe <$> gcc_jit_function_new_block func c_name
+functionNewBlock func Nothing = ptrToMaybe <$> gcc_jit_function_new_block func nullPtr
+
+foreign import ccall "gcc_jit_block_as_object" blockAsObject :: Ptr Block -> IO (Ptr Object)
+
+foreign import ccall "gcc_jit_block_get_function" blockGetFunction :: Ptr Block -> IO (Ptr Function)
+
+data GlobalKind = GlobalExported
+    | GlobalInternal
+    | GlobalImported
+    deriving (Enum)
+
+foreign import ccall "gcc_jit_context_new_global" gcc_jit_context_new_global :: Ptr Context -> Ptr Location -> CInt -> Ptr Type -> CString -> IO (Ptr LValue)
+contextNewGlobal :: Ptr Context -> Ptr Location -> GlobalKind -> Ptr Type -> String -> IO (Ptr LValue)
+contextNewGlobal ctxt loc kind type' name = do
+    c_name <- newCString name
+    gcc_jit_context_new_global ctxt loc (fromIntegral $ fromEnum kind) type' c_name
+
+foreign import ccall "gcc_jit_context_new_struct_constructor" gcc_jit_context_new_struct_constructor :: Ptr Context -> Ptr Location -> Ptr Type -> CSize -> Ptr (Ptr Field) -> Ptr (Ptr RValue) -> IO (Ptr RValue)
+contextNewStructConstructor :: Ptr Context -> Ptr Location -> Ptr Type -> Either [Ptr RValue] [(Ptr Field, Maybe (Ptr RValue))] -> IO (Maybe (Ptr RValue))
+contextNewStructConstructor ctxt loc type' (Left values) = do
+    c_values <- listToPtr values
+    ptrToMaybe <$> gcc_jit_context_new_struct_constructor ctxt loc type' (fromIntegral $ length values) nullPtr c_values
+contextNewStructConstructor ctxt loc type' (Right fieldValues) = do
+    (c_fields, c_values) <- uncurry (liftA2 (,)) $ bimap listToPtr (listToPtr . map maybeToPtr) $ unzipPairs fieldValues 
+    ptrToMaybe <$> gcc_jit_context_new_struct_constructor ctxt loc type' (fromIntegral $ length fieldValues) c_fields c_values
+
+foreign import ccall "gcc_jit_context_new_union_constructor" gcc_jit_context_new_union_constructor :: Ptr Context -> Ptr Location -> Ptr Type -> Ptr Field -> Ptr RValue -> IO (Ptr RValue)
+contextNewUnionConstructor :: Ptr Context -> Ptr Location -> Ptr Type -> Maybe (Ptr Field) -> Maybe (Ptr RValue) -> IO (Maybe (Ptr RValue))
+contextNewUnionConstructor ctxt loc type' field value = 
+    ptrToMaybe <$> gcc_jit_context_new_union_constructor ctxt loc type' (maybeToPtr field) (maybeToPtr value)
+
+foreign import ccall "gcc_jit_context_new_array_constructor" gcc_jit_context_new_array_constructor :: Ptr Context -> Ptr Location -> Ptr Type -> CSize -> Ptr (Ptr RValue) -> IO (Ptr RValue)
+contextNewArrayConstructor :: Ptr Context -> Ptr Location -> Ptr Type -> [Ptr RValue] -> IO (Maybe (Ptr RValue))
+contextNewArrayConstructor ctxt loc type' values = do
+    c_values <- listToPtr values
+    ptrToMaybe <$> gcc_jit_context_new_array_constructor ctxt loc type' (fromIntegral $ length values) c_values
+
+foreign import ccall "gcc_jit_global_set_initializer_rvalue" gcc_jit_global_set_initializer_rvalue :: Ptr LValue -> Ptr RValue -> IO (Ptr LValue)
+globalSetInitializerRValue :: Ptr LValue -> Ptr RValue -> IO (Maybe (Ptr LValue))
+globalSetInitializerRValue global = fmap ptrToMaybe . gcc_jit_global_set_initializer_rvalue global
+
+foreign import ccall "gcc_jit_global_set_initializer" gcc_jit_global_set_initializer :: Ptr LValue -> Ptr a -> CSize -> IO (Ptr LValue)
+globalSetInitializer :: Storable a => Ptr LValue -> Ptr a -> Int -> IO (Ptr LValue)
+globalSetInitializer global ptr = gcc_jit_global_set_initializer global ptr . fromIntegral
+
+foreign import ccall "gcc_jit_lvalue_as_object" lValueAsObject :: Ptr LValue -> IO (Ptr Object)
+foreign import ccall "gcc_jit_rvalue_as_object" rValueAsObject :: Ptr RValue -> IO (Ptr Object)
+foreign import ccall "gcc_jit_lvalue_as_rvalue" lValueAsRValue :: Ptr LValue -> IO (Ptr RValue)
+foreign import ccall "gcc_jit_rvalue_get_type" rValueGetType :: Ptr RValue -> IO (Ptr Type)
+
+foreign import ccall "gcc_jit_context_zero" contextZero :: Ptr Context -> Ptr Type -> IO (Ptr RValue)
+foreign import ccall "gcc_jit_context_one" contextOne :: Ptr Context -> Ptr Type -> IO (Ptr RValue)
+
+foreign import ccall "gcc_jit_context_new_rvalue_from_int" gcc_jit_context_new_rvalue_from_int :: Ptr Context -> Ptr Type -> CInt -> IO (Ptr RValue)
+contextNewRValueFromInt :: Ptr Context -> Ptr Type -> Int -> IO (Ptr RValue)
+contextNewRValueFromInt ctxt numericType = gcc_jit_context_new_rvalue_from_int ctxt numericType . fromIntegral
+
+foreign import ccall "gcc_jit_context_new_rvalue_from_long" gcc_jit_context_new_rvalue_from_long :: Ptr Context -> Ptr Type -> CLong -> IO (Ptr RValue)
+contextNewRValueFromLong :: Ptr Context -> Ptr Type -> Int64 -> IO (Ptr RValue)
+contextNewRValueFromLong ctxt numericType = gcc_jit_context_new_rvalue_from_long ctxt numericType . fromIntegral
+
+foreign import ccall "gcc_jit_context_new_rvalue_from_double" gcc_jit_context_new_rvalue_from_double :: Ptr Context -> Ptr Type -> CDouble -> IO (Ptr RValue)
+contextNewRValueFromDouble :: Ptr Context -> Ptr Type -> Double -> IO (Ptr RValue)
+contextNewRValueFromDouble ctxt numericType = gcc_jit_context_new_rvalue_from_double ctxt numericType . realToFrac
+
+foreign import ccall "gcc_jit_context_new_rvalue_from_ptr" contextNewRValueFromPtr :: Ptr Context -> Ptr Type -> Ptr a -> IO (Ptr RValue)
+foreign import ccall "gcc_jit_context_null" contextNull :: Ptr Context -> Ptr Type -> IO (Ptr RValue)
+
+foreign import ccall "gcc_jit_context_new_string_literal" gcc_jit_context_new_string_literal :: Ptr Context -> CString -> IO (Ptr RValue)
+contextNewStringLiteral :: Ptr Context -> String -> IO (Ptr RValue)
+contextNewStringLiteral ctxt value = do
+    c_value <- newCString value
+    gcc_jit_context_new_string_literal ctxt c_value
 

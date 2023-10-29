@@ -20,14 +20,27 @@ unwrapOrDie x msg = do
         Just x'' -> return x''
 
 createCode :: Ptr GccJit.Context -> IO ()
-createCode ctxt = 
+createCode ctxt = do
     {-
         Let's try to inject the equivalent of:
         void greet (const char *name)
         {
             printf ("hello %s\n", name);
         }
-    -} 
+    -}
+    voidType <- GccJit.contextGetType ctxt GccJit.Void
+    constCharPtrType <- GccJit.contextGetType ctxt GccJit.ConstCharPtr
+    paramName <- GccJit.contextNewParam ctxt nullPtr constCharPtrType "format"
+    func <- GccJit.contextNewFunction ctxt nullPtr GccJit.FunctionExported voidType "greet" [paramName] False
+
+    paramFormat <- GccJit.contextNewParam ctxt nullPtr constCharPtrType "format"
+    intType <- GccJit.contextGetType ctxt GccJit.Int
+    printFunc <- GccJit.contextNewFunction ctxt nullPtr GccJit.FunctionImported intType "printf" [paramFormat] True
+
+    formatArg <- GccJit.contextNewStringLiteral ctxt "Hello %s!\n"
+    nameArg <- GccJit.paramAsRValue paramName
+
+
     return ()
 
 main :: IO ()
