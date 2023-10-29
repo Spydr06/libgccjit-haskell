@@ -153,6 +153,15 @@ module GccJit (
     versionMajor,
     versionMinor,
     versionPatchlevel,
+    blockAddExtendedAsm,
+    blockEndWithExtendedAsmGoto,
+    extendedAsmAsObject,
+    extendedAsmSetVolatileFlag,
+    extendedAsmSetInlineFlag,
+    extendedAsmAddOutputOperand,
+    extendedAsmAddInputOperand,
+    extendedAsmAddClobber,
+    contextAddTopLevelAsm,
 ) where
 
 import Foreign
@@ -161,8 +170,6 @@ import Foreign.C (CString, newCString)
 import System.Posix.Types (CSsize)
 import Data.Bifunctor (Bifunctor(bimap))
 import Control.Applicative (Applicative(liftA2))
-import System.Timeout (Timeout)
-import GHC.Read (list)
 
 -- libgccjit data types (opaque C structs)
 data Context
@@ -773,5 +780,58 @@ versionMinor = fromIntegral <$> gcc_jit_version_minor
 foreign import ccall "gcc_jit_version_patchlevel" gcc_jit_version_patchlevel :: IO CInt
 versionPatchlevel :: IO Int
 versionPatchlevel = fromIntegral <$> gcc_jit_version_patchlevel
+
+foreign import ccall "gcc_jit_block_add_extended_asm" gcc_jit_block_add_extended_asm :: Ptr Block -> Ptr Location -> CString -> IO (Ptr ExtendedAsm)
+blockAddExtendedAsm :: Ptr Block -> Ptr Location -> String -> IO (Ptr ExtendedAsm)
+blockAddExtendedAsm block loc asmTemplate = do
+    c_asmTemplate <- newCString asmTemplate
+    gcc_jit_block_add_extended_asm block loc c_asmTemplate
+
+foreign import ccall "gcc_jit_block_end_with_extended_asm_goto" gcc_jit_block_end_with_extended_asm_gogo :: Ptr Block -> Ptr Location -> CString -> CInt -> Ptr (Ptr Block) -> Ptr Block -> IO (Ptr ExtendedAsm)
+blockEndWithExtendedAsmGoto :: Ptr Block -> Ptr Location -> String -> [Ptr Block] -> Ptr Block -> IO (Ptr ExtendedAsm)
+blockEndWithExtendedAsmGoto block loc asmTemplate gotoBlocks fallthroughBlock = do
+    c_asmTemplate <- newCString asmTemplate
+    c_gotoBlocks <- listToPtr gotoBlocks
+    gcc_jit_block_end_with_extended_asm_gogo block loc c_asmTemplate (fromIntegral $ length gotoBlocks) c_gotoBlocks fallthroughBlock
+
+foreign import ccall "gcc_jit_extended_asm_as_object" extendedAsmAsObject :: Ptr ExtendedAsm -> IO (Ptr Object)
+
+foreign import ccall "gcc_jit_extended_asm_set_volatile_flag" gcc_jit_extended_asm_set_volatile_flag :: Ptr ExtendedAsm -> CInt -> IO ()
+extendedAsmSetVolatileFlag :: Ptr ExtendedAsm -> Bool -> IO ()
+extendedAsmSetVolatileFlag extAsm = gcc_jit_extended_asm_set_volatile_flag extAsm . fromIntegral . fromEnum
+
+foreign import ccall "gcc_jit_extended_asm_set_inline_flag" gcc_jit_extended_asm_set_inline_flag :: Ptr ExtendedAsm -> CInt -> IO ()
+extendedAsmSetInlineFlag :: Ptr ExtendedAsm -> Bool -> IO ()
+extendedAsmSetInlineFlag extAsm = gcc_jit_extended_asm_set_inline_flag extAsm . fromIntegral . fromEnum
+
+foreign import ccall "gcc_jit_extended_asm_add_output_operand" gcc_jit_extended_asm_add_output_operand :: Ptr ExtendedAsm -> CString -> CString -> Ptr LValue -> IO ()
+extendedAsmAddOutputOperand :: Ptr ExtendedAsm -> Maybe String -> String -> Ptr LValue -> IO ()
+extendedAsmAddOutputOperand extAsm symbolicName constraint dest = do
+    c_symbolicName <- case symbolicName of
+        Nothing -> return nullPtr
+        Just symbolicName' -> newCString symbolicName'
+    c_contsraint <- newCString constraint
+    gcc_jit_extended_asm_add_output_operand extAsm c_symbolicName c_contsraint dest
+
+foreign import ccall "gcc_jit_extended_asm_add_input_operand" gcc_jit_extended_asm_add_input_operand :: Ptr ExtendedAsm -> CString -> CString -> Ptr RValue -> IO ()
+extendedAsmAddInputOperand :: Ptr ExtendedAsm -> Maybe String -> String -> Ptr RValue -> IO ()
+extendedAsmAddInputOperand extAsm symbolicName constraint src = do
+    c_symbolicName <- case symbolicName of
+        Nothing -> return nullPtr
+        Just symbolicName' -> newCString symbolicName'
+    c_contsraint <- newCString constraint
+    gcc_jit_extended_asm_add_input_operand extAsm c_symbolicName c_contsraint src
+
+foreign import ccall "gcc_jit_extended_asm_add_clobber" gcc_jit_extended_asm_add_clobber :: Ptr ExtendedAsm -> CString -> IO ()
+extendedAsmAddClobber :: Ptr ExtendedAsm -> String -> IO ()
+extendedAsmAddClobber extAsm victim = do
+    c_victim <- newCString victim
+    gcc_jit_extended_asm_add_clobber extAsm c_victim
+
+foreign import ccall "gcc_jit_context_add_top_level_asm" gcc_jit_context_add_top_level_asm :: Ptr Context -> Ptr Location -> CString -> IO ()
+contextAddTopLevelAsm :: Ptr Context -> Ptr Location -> String -> IO ()
+contextAddTopLevelAsm ctxt loc asmStmts = do
+    c_asmStmts <- newCString asmStmts
+    gcc_jit_context_add_top_level_asm ctxt loc c_asmStmts
 
 
