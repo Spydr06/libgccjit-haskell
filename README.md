@@ -16,8 +16,7 @@ import System.Exit
 import System.IO
 
 type GreetFunction = CString -> IO ()
-foreign import ccall "dynamic"
-    mkFun :: FunPtr (GreetFunction) -> (GreetFunction)
+foreign import ccall "dynamic" mkFun :: FunPtr (GreetFunction) -> (GreetFunction)
 
 unwrapOrDie :: IO (Maybe a) -> String -> IO a
 unwrapOrDie x msg = do
@@ -52,8 +51,6 @@ createCode ctxt = do
 
     GccJit.blockAddEval block nullPtr printCall
     GccJit.blockEndWithVoidReturn block nullPtr
-
-    return ()
 
 main :: IO ()
 main = do
