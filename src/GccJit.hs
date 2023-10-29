@@ -408,7 +408,7 @@ data IntOption = OptimizationLevel
 
 -- Options taking boolean values.
 -- These all default to "false".
-data BoolOption = DebugInfo
+data BoolOption =
     {- If true, gcc_jit_context_compile will attempt to do the right
        thing so that if you attach a debugger to the process, it will
        be able to inspect variables and step through your code.
@@ -416,7 +416,7 @@ data BoolOption = DebugInfo
        Note that you can't step through code unless you set up source
        location information for the code (by creating and passing in
        gcc_jit_location instances). -}
-    | DebugInfo
+    DebugInfo
     
     {- If true, gcc_jit_context_compile will dump its initial "tree"
        representation of your code to stderr (before any
