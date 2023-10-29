@@ -162,6 +162,21 @@ module GccJit (
     extendedAsmAddInputOperand,
     extendedAsmAddClobber,
     contextAddTopLevelAsm,
+    functionGetReturnType,
+    functionGetParamCount,
+    typeDyncastArray,
+    typeIsBool,
+    typeDyncastFunctionPtrType,
+    functionTypeGetReturnType,
+    functionTypeGetParamCount,
+    functionTypeGetParamType,
+    typeIsIntegral,
+    typeIsPointer,
+    typeDyncastVector,
+    typeIsStruct,
+    vectorTypeGetNumUnits,
+    vectorTypeGetElementType,
+    typeUnqualified
 ) where
 
 import Foreign
@@ -834,4 +849,55 @@ contextAddTopLevelAsm ctxt loc asmStmts = do
     c_asmStmts <- newCString asmStmts
     gcc_jit_context_add_top_level_asm ctxt loc c_asmStmts
 
+foreign import ccall "gcc_jit_function_get_return_type" functionGetReturnType :: Ptr Function -> IO (Ptr Type)
+
+foreign import ccall "gcc_jit_function_get_param_count" gcc_jit_function_get_param_count :: Ptr Function -> IO CSize
+functionGetParamCount :: Ptr Function -> IO Int64
+functionGetParamCount = fmap fromIntegral . gcc_jit_function_get_param_count
+
+foreign import ccall "gcc_jit_type_dyncast_array" gcc_jit_type_dyncast_array :: Ptr Type -> IO (Ptr Type)
+typeDyncastArray :: Ptr Type -> IO (Maybe (Ptr Type))
+typeDyncastArray = fmap ptrToMaybe . gcc_jit_type_dyncast_array
+
+foreign import ccall "gcc_jit_type_is_bool" gcc_jit_type_is_bool :: Ptr Type -> IO CInt
+typeIsBool :: Ptr Type -> IO Bool
+typeIsBool = fmap (0 /=) . gcc_jit_type_is_bool
+
+foreign import ccall "gcc_jit_type_dyncast_function_ptr_type" gcc_jit_type_dyncast_function_ptr_type :: Ptr Type -> IO (Ptr FunctionType)
+typeDyncastFunctionPtrType :: Ptr Type -> IO (Maybe (Ptr FunctionType))
+typeDyncastFunctionPtrType = fmap ptrToMaybe . gcc_jit_type_dyncast_function_ptr_type
+
+foreign import ccall "gcc_jit_function_type_get_return_type" functionTypeGetReturnType :: Ptr FunctionType -> IO (Ptr Type)
+
+foreign import ccall "gcc_jit_function_type_get_param_count" gcc_jit_function_type_get_param_count :: Ptr FunctionType -> IO CSize
+functionTypeGetParamCount :: Ptr FunctionType -> IO Int64
+functionTypeGetParamCount = fmap fromIntegral . gcc_jit_function_type_get_param_count
+
+foreign import ccall "gcc_jit_function_type_get_param_type" gcc_jit_function_type_get_param_type :: Ptr FunctionType -> CSize -> IO (Ptr Type)
+functionTypeGetParamType :: Ptr FunctionType -> Int64 -> IO (Maybe (Ptr Type))
+functionTypeGetParamType fnType = fmap ptrToMaybe . gcc_jit_function_type_get_param_type fnType . fromIntegral
+
+foreign import ccall "gcc_jit_type_is_integral" gcc_jit_type_is_integral :: Ptr Type -> IO CInt
+typeIsIntegral :: Ptr Type -> IO Bool
+typeIsIntegral = fmap (0 /=) . gcc_jit_type_is_integral
+
+foreign import ccall "gcc_jit_type_is_pointer" gcc_jit_type_is_pointer :: Ptr Type -> IO (Ptr Type)
+typeIsPointer :: Ptr Type -> IO (Maybe (Ptr Type))
+typeIsPointer = fmap ptrToMaybe . gcc_jit_type_is_pointer
+
+foreign import ccall "gcc_jit_type_dyncast_vector" gcc_jit_type_dyncast_vector :: Ptr Type -> IO (Ptr VectorType)
+typeDyncastVector :: Ptr Type -> IO (Maybe (Ptr VectorType))
+typeDyncastVector = fmap ptrToMaybe . gcc_jit_type_dyncast_vector
+
+foreign import ccall "gcc_jit_type_is_struct" gcc_jit_type_is_struct :: Ptr Type -> IO (Ptr Struct)
+typeIsStruct :: Ptr Type -> IO (Maybe (Ptr Struct))
+typeIsStruct = fmap ptrToMaybe . gcc_jit_type_is_struct
+
+foreign import ccall "gcc_jit_vector_type_get_num_units" gcc_jit_vector_type_get_num_units :: Ptr VectorType -> IO CSize
+vectorTypeGetNumUnits :: Ptr VectorType -> IO Int64
+vectorTypeGetNumUnits = fmap fromIntegral . gcc_jit_vector_type_get_num_units
+
+foreign import ccall "gcc_jit_vector_type_get_element_type" vectorTypeGetElementType :: Ptr VectorType -> IO (Ptr Type)
+
+foreign import ccall "gcc_jit_type_unqualified" typeUnqualified :: Ptr Type -> IO (Ptr Type)
 
