@@ -135,7 +135,7 @@ module GccJit (
     contextNewCallThroughPtr,
     contextNewCast,
     contextNewBitcast,
-    lValueGetAlignemnt,
+    lValueGetAlignment,
     lValueSetAlignment,
     contextNewArrayAccess,
     lValueAccessField,
@@ -1444,8 +1444,8 @@ lValueSetAlignment lvalue = gcc_jit_lvalue_set_alignment lvalue . fromIntegral
 
 --Get the alignment of a variable.
 foreign import ccall "gcc_jit_lvalue_get_alignment" gcc_jit_lvalue_get_alignment :: Ptr LValue -> IO CUInt
-lValueGetAlignemnt :: Ptr LValue -> IO Int
-lValueGetAlignemnt = fmap fromIntegral . gcc_jit_lvalue_get_alignment
+lValueGetAlignment :: Ptr LValue -> IO Int
+lValueGetAlignment = fmap fromIntegral . gcc_jit_lvalue_get_alignment
 
 foreign import ccall "gcc_jit_context_new_array_access" contextNewArrayAccess :: Ptr Context -> Ptr Location -> Ptr RValue -> Ptr RValue -> IO (Ptr LValue)
 
