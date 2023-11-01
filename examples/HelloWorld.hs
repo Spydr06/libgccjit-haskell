@@ -3,6 +3,7 @@
 module Main (main) where
 
 import qualified GccJit
+import qualified GccJit.Utils
 
 import Foreign.Ptr
 import Foreign.C (CString, newCString)
@@ -69,7 +70,7 @@ main = do
     mkFun greet worldStr
     hFlush stdout
 
-    GccJit.contextRelease ctxt
-    GccJit.resultRelease result
+    GccJit.Utils.release ctxt
+    GccJit.Utils.release result
 
 

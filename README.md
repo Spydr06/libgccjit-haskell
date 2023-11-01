@@ -3,6 +3,18 @@ Haskell bindings for the `libgccjit` library
 
 ## Example:
 
+Examples are located in the `example/` directory. To compile an example, use:
+
+```console
+$ cabal exec -- ghc examples/<Example>.hs -package libgccjit
+```
+
+Then, to run the program, use:
+
+```console
+$ ./example/<Example>
+```
+
 ```haskell
 {-# LANGUAGE ForeignFunctionInterface #-}
 

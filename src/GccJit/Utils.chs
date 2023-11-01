@@ -1,6 +1,7 @@
 module GccJit.Utils (
     AsObject(..),
-    AsType(..)
+    AsType(..),
+    Releasable(..),
 ) where
 
 #include <libgccjit.h>
@@ -55,3 +56,17 @@ instance AsType Type where
 
 instance AsType Struct where
     asType = structAsType
+
+class Releasable a where
+    release :: Ptr a -> IO ()
+
+instance Releasable Context where
+    release = contextRelease
+
+instance Releasable Result where
+    release = resultRelease
+
+#ifdef LIBGCCJIT_HAVE_TIMING_API
+instance Releasable Timer where
+    release = timerRelease
+#endif
