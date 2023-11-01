@@ -30,3 +30,34 @@ library
     default-language: Haskell2010
     includes:
         libgccjit.h
+
+executable Tutorial01
+    main-is: examples/Tutorial01.hs
+    build-depends:
+        base ^>=4.17.2.0,
+        libgccjit
+
+executable Tutorial02
+    main-is: examples/Tutorial02.hs
+    build-depends:
+        base ^>=4.17.2.0,
+        libgccjit
+
+executable Tutorial03
+    main-is: examples/Tutorial03.hs
+    build-depends:
+        base ^>=4.17.2.0,
+        libgccjit
+
+executable Tutorial04
+    main-is: examples/Tutorial04.hs
+    build-depends:
+        base ^>=4.17.2.0,
+        libgccjit
+
+executable Tutorial05
+    main-is: examples/Tutorial05.hs
+    build-depends:
+        base ^>=4.17.2.0,
+        libgccjit
+
