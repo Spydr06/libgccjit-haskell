@@ -18,9 +18,12 @@ $ ./example/<Example>
 ```haskell
 {-# LANGUAGE ForeignFunctionInterface #-}
 
+{- Ported from https://gcc.gnu.org/onlinedocs/jit/intro/tutorial01.html -}
+
 module Main (main) where
 
 import qualified GccJit
+import GccJit.Utils (release)
 
 import Foreign.Ptr
 import Foreign.C (CString, newCString)
@@ -28,7 +31,7 @@ import System.Exit
 import System.IO
 
 type GreetFunction = CString -> IO ()
-foreign import ccall "dynamic" mkFun :: FunPtr (GreetFunction) -> (GreetFunction)
+foreign import ccall "dynamic" mkFun :: FunPtr GreetFunction -> GreetFunction
 
 unwrapOrDie :: IO (Maybe a) -> String -> IO a
 unwrapOrDie x msg = do
@@ -84,11 +87,11 @@ main = do
     
     -- Now call the generated function:
     worldStr <- newCString "World"
-    (mkFun greet) worldStr
+    mkFun greet worldStr
     hFlush stdout
 
-    GccJit.contextRelease ctxt
-    GccJit.resultRelease result
+    release ctxt
+    release result
 ```
 
 See [examples/](./examples) for more example files.

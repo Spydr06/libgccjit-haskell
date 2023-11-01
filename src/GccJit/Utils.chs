@@ -1,6 +1,7 @@
 module GccJit.Utils (
     AsObject(..),
     AsType(..),
+    AsRValue(..),
     Releasable(..),
 ) where
 
@@ -56,6 +57,18 @@ instance AsType Type where
 
 instance AsType Struct where
     asType = structAsType
+
+class AsRValue a where
+    asRValue :: Ptr a -> IO (Ptr RValue)
+
+instance AsRValue RValue where
+    asRValue = return
+
+instance AsRValue Param where
+    asRValue = paramAsRValue
+
+instance AsRValue LValue where
+    asRValue = lValueAsRValue
 
 class Releasable a where
     release :: Ptr a -> IO ()

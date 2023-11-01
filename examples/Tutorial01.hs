@@ -1,9 +1,11 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 
+{- Ported from https://gcc.gnu.org/onlinedocs/jit/intro/tutorial01.html -}
+
 module Main (main) where
 
 import qualified GccJit
-import qualified GccJit.Utils
+import GccJit.Utils (release)
 
 import Foreign.Ptr
 import Foreign.C (CString, newCString)
@@ -70,7 +72,5 @@ main = do
     mkFun greet worldStr
     hFlush stdout
 
-    GccJit.Utils.release ctxt
-    GccJit.Utils.release result
-
-
+    release ctxt
+    release result
