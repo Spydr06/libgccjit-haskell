@@ -1,6 +1,6 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 
-{- Ported from https://gcc.gnu.org/onlinedocs/jit/intro/tutorial01.html -}
+{- Ported from https://gcc.gnu.org/onlinedocs/jit/intro/tutorial04.html -}
 
 module Main (main) where
 
