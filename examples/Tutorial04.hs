@@ -16,7 +16,6 @@ import Data.List
 import Control.Monad (filterM)
 import Data.Maybe (catMaybes, fromMaybe)
 import System.Environment (getArgs, getProgName)
-import Data.Ord (comparing)
 
 data OpCode = 
     -- Ops taking no operand.
@@ -346,18 +345,18 @@ unwrapOrDie x msg = do
 main :: IO ()
 main = do
     args <- getArgs
-    if length args /= 2 
-        then do
-            prog <- getProgName 
-            die $ show prog ++ " FILENAME INPUT: Parse and run a .toy file\n"
-        else let filename = head args in do
+    case args of
+        [filename, arg] -> do
             fn <- functionParse filename filename
             putStrLn $ functionDisassemble fn
-            iResult <- functionInterpret fn (read $ args !! 1) $ Just stdout
-            putStrLn $ "interpreter result: " ++ show iResult
-            
+            iResult <- functionInterpret fn (read arg) $ Just stdout
+            putStrLn $ "interpreter result: " ++ show iResult            
             -- JIT-compilation.
             compiledFn <- functionCompile fn
-            jitResult <- cfCode compiledFn $ read $ args !! 1
+            jitResult <- cfCode compiledFn $ read arg
             putStrLn $ "compiler result: " ++ show jitResult
+        _ -> do
+            prog <- getProgName 
+            die $ show prog ++ " FILENAME INPUT: Parse and run a .toy file\n"
+
 
