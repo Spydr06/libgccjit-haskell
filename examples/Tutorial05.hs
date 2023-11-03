@@ -10,10 +10,8 @@ import qualified GccJit.Types
 
 import System.Exit (exitFailure, die, exitSuccess)
 import Foreign.Ptr
-import GccJit (LValue)
-import Control.Monad (when, foldM)
+import Control.Monad (when)
 import Data.Char (ord)
-import qualified GccJit as GccJIt
 import Data.Foldable (foldlM)
 
 unwrapOrDie :: IO (Maybe a) -> String -> IO a
@@ -70,7 +68,7 @@ fatalError bfc msg = do
     exitFailure
 
 -- Get "data_cells[idx] as an lvalue."
-bfGetCurrentData :: BfCompiler -> Ptr GccJit.Location -> IO (Ptr LValue)
+bfGetCurrentData :: BfCompiler -> Ptr GccJit.Location -> IO (Ptr GccJit.LValue)
 bfGetCurrentData bfc loc = do
     dataCells <- GccJit.lValueAsRValue $ dataCells bfc
     idx <- GccJit.lValueAsRValue $ idx bfc
@@ -172,7 +170,7 @@ bfCompile filename = do
     GccJit.setBoolOption ctxt GccJit.DumpInitialGimple False
     GccJit.setBoolOption ctxt GccJit.DebugInfo True
     GccJit.setBoolOption ctxt GccJit.DumpEverything False
-    GccJit.setBoolOption ctxt GccJIt.KeepIntermediate False
+    GccJit.setBoolOption ctxt GccJit.KeepIntermediate False
 
     voidType <- GccJit.contextGetType ctxt GccJit.Void
     intType <- GccJit.contextGetType ctxt GccJit.Int
