@@ -9,6 +9,19 @@ Examples are located in the `example/` directory. To compile an example, use:
 $ cabal run TutorialXX
 ```
 
+The available examples are:
+
+- `Tutorial01` "Hello world" [(origin)](https://gcc.gnu.org/onlinedocs/jit/intro/tutorial01.html)
+- `Tutorial02` Creating a trivial machine code function [(origin)](https://gcc.gnu.org/onlinedocs/jit/intro/tutorial02.html)
+- `Tutorial03` Loops and variables [(origin)](https://gcc.gnu.org/onlinedocs/jit/intro/tutorial03.html)
+- `Tutorial04` Adding JIT-compilation to a toy interpreter [(origin)](https://gcc.gnu.org/onlinedocs/jit/intro/tutorial03.html)
+- `Tutorial05` Implementing an Ahead-of-Time compiler [(origin)](https://gcc.gnu.org/onlinedocs/jit/intro/tutorial05.html)
+
+> **Note**
+> All the examples are ported from the official `libgccjit` tutorials. All credits go to the Freesoftware Foundation, Inc.
+
+The "Hello World" example:
+
 ```haskell
 {-# LANGUAGE ForeignFunctionInterface #-}
 
